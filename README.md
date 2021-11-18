@@ -1,4 +1,118 @@
 ![](/5.Docs/Images/Holo1.jpg)
+# HoloCubic--Multifunctional transparent display desktop station
+
+**Video introduction:** https://www.bilibili.com/video/BV1VA411p7MD/
+
+## 0. About this project
+
+> Zhihui Jun's Note: This is to update the video and ease the embarrassment of delaying the update for two months. An interesting gadget that I rushed out in a weekend :D
+
+As mentioned in the video, the interesting part of this project is the use of a dichroic prism to design the effect of `pseudo holographic display`. In general, this small device has more functions, because it is equipped with WiFi and Bluetooth capabilities to achieve many network applications. In this warehouse, we provide you with a development framework and some basic functions (weather, fan count monitor, etc.), everyone I can continue to expand and implement more applications based on my plan.
+
+The hardware solution of this project is based on `ESP32PICO-D4`, a very practical MCU chip of Espressif. Due to the use of SiP package, the entire board area of ​​PCBA can be the size of a coin; the software is mainly based on `lvgl- GUI` library, I transplanted ST7789 1.3 inch `240x240` resolution screen display driver, and at the same time use `MPU6050` as an input device to simulate the encoder key value through induction to interact.
+
+## 1. Hardware proofing instructions
+
+**For PCB proofing, I haven't found anything that needs special attention for the time being. ** The PCB file can be directly taken to the factory for proofing. The two-layer board is very cheap, and the device BOM is also more commonly used. The entire board cost is less than 50 yuan.
+
+The `Hardware` file currently contains two versions of the PCB circuit:
+
+* **Naive Version**: The version that appears in the video, onboard ESP32, IMU, ambient light sensor, SD card slot, download circuit, and two RGB lights
+* **Ironman Version**: Based on the above version slightly modified, the ambient light sensor is deleted, and the PCB shape is modified to fit the new housing
+
+> Because the new shell plan is to use CNC for metal processing, the ambient light is easily blocked, and there are not many scenarios for this function, so it is deleted in the new version.
+
+**Shell processing** According to the version you like, the `3D Model` folder currently contains four versions of shell files:
+
+* **Naive Version**: The version that appears in the video, which is relatively simple (because it is designed for temporary work), and it is best to use light-curing 3D printing processing
+
+  ![](/5.Docs/Images/Holo3.png)
+
+* **Bilibili Version**: The shell structure of the Hundred trophy of Station B that appears in the back of the video, adapts to the PCB of the `Naive Version`, **It is of entertainment nature, and it is not recommended for non-Baba UP**.
+
+* **Metal Version**: After the video is released, the newly revised housing structure design optimizes the layout and controls to be more compact and exquisite. It is suitable for the PCB of `Naive Version`. CNC processing is recommended.
+
+  ![](/5.Docs/Images/Holo2.jpg)
+
+* **Ironman Version**: Newly designed Wild Iron Man style structure, this version is designed in cooperation with a friend, and he may be authorized to mass produce it later. This structure is adapted to the PCB of the `Ironman Version`
+
+  ![](/5.Docs/Images/Holo.jpg)
+
+> The processing of the structural parts of the joint version of Wild Iron Man is more complicated, and it requires post-sandblasting, anodizing and other processes, so the single-piece manufacturing cost is very high (inquired about the next set of 3 parts at least 1,000 yuan +), so you have your own For processing channels, you can use the provided documents to do it yourself.
+>
+> If you don’t have a channel but you want this version of the hardware, **I authorized that friend to mass produce a small batch**. His shop is called [Xikii](https://shop68240117.taobao.com) and is a guest A geek who is very experienced in customizing the keyboard, if you are interested, you can pay attention to it~
+
+## 2. Firmware compilation instructions
+
+The firmware framework is mainly developed based on Arduino. If you have played with Arduino, there is basically no difficulty in getting started. Just install the library in Firmware/Libraries to the Arduino library directory (if you are using Arduino IDE).
+
+> I use the Visual Micro plug-in on Visual Studio for Arduino development. Because I am familiar with VS, you can choose your favorite IDE.
+
+**Then you need to modify an official library file to use it normally:**
+
+First of all, you must install the ESP32 Arduino support package (Baidu has a large number of tutorials), and then in the `esp32\hardware\esp32\1.0.4\libraries\SPI\src\SPI.cpp` file of the installed support package, **modify The MISO in the following code is 26**:
+
+    if(sck == -1 && miso == -1 && mosi == -1 && ss == -1) {
+        _sck = (_spi_num == VSPI)? SCK: 14;
+        _miso = (_spi_num == VSPI)? MISO: 12; // Need to be changed to 26
+        _mosi = (_spi_num == VSPI)? MOSI: 13;
+        _ss = (_spi_num == VSPI)? SS: 15;
+This is because two hardware SPIs are used to connect the screen and SD card on the hardware. The default MISO pin of HSPI is 12, and 12 is used in ESP32 to set the flash level when powering on, and power on before powering on. Pulling will cause the chip to fail to start, so we replaced the default pin with 26.
+
+> This problem can also be solved by setting the chip fuse, but that kind of operation is one-time irreversible and it is not recommended to play this way.
+
+**in addition:**
+
+Since I rushed to make the video, the code was written temporarily and very messy with a lot of dirty code, so the template code in the warehouse is all the template code after the driver is adjusted, and you can freely develop it based on this framework.
+
+**APP application code will be updated gradually as I organize it. **
+
+## 3. Visual Studio Simulator & Image Conversion Script
+
+A Visual Studio project is included in the `Software` folder. After opening it with VS (C++ development components are required), the LVGL interface effect can be simulated on the computer. After the modification, the code can be pasted to the Arduino firmware to complete the interface. transplant.
+
+> This saves the need to re-compile the Arduino firmware for every modification to improve development efficiency.
+
+![](/5.Docs/Images/Holo4.jpg)
+
+The `ImageToHolo` folder contains a Python script to convert images into image resources used in the HoloCubic firmware.
+
+> Because image resources generally take up more space, if they are all stored in ESP32 Flash, there are not a few that can be stored. Therefore, I transplanted LVGL's FAT file system support into the framework, and the image resources can be stored in the SD card for reading.
+>
+> The official image conversion tool is online: [https://lvgl.io/tools/imageconverter](https://lvgl.io/tools/imageconverter), you need to select the `Indexed 4 colors` format.
+>
+> **But the official tool can only convert one piece at a time and uploading and downloading is very troublesome**, so I wrote a script for batch conversion.
+
+The image resource used by HoloCubic is named `xxx.bin` file, you can use the script I provided to convert it and put it into the SD card, and then you can read it like this:
+
+```
+lv_obj_t* imgbtn = lv_imgbtn_create(lv_scr_act(), NULL);
+lv_imgbtn_set_src(imgbtn, LV_BTN_STATE_PRESSED, "S:/dir/icon_pressed.bin");
+lv_imgbtn_set_src(imgbtn, LV_BTN_STATE_RELEASED, "S:/dir/icon_released.bin");
+```
+
+Among them, `S:` refers to the root directory of the SD card (note that **S is capitalized**), and the following is exactly the same as the path in Linux.
+
+> This script refers to the implementation of [W-Mai/lvgl_image_converter](https://github.com/W-Mai/lvgl_image_converter).
+
+
+
+**In addition, because the conversion script needs to be in the Python environment, if you don’t want to install the environment, you can also use my pre-compiled exe file to transfer. The method of use is very simple. Drag the `jpg/png/bmp` picture to Just click on the icon of `holoconverter.exe` (you can drag multiple upwards at the same time), and the corresponding `.holo` file will be generated in the current directory. **
+
+> Download link of the converter software:
+>
+> Link: https://pan.baidu.com/s/11cPOVYnKkxmd88o-Ouwb5g Extraction code: xlju
+
+## 4. About Dichroic Prism
+
+I used a 25.4mm x 25.4mm x 25.4mm prism, which should be available on Taobao. The single price is about 80 yuan.
+
+Fixing the spectroscopic prism is more troublesome. If glue is used, it will easily penetrate into the screen and cause watermarks. Therefore, it is recommended to search for `OCA glue` in TB. This is a solid glue used to bond the screen in the `Full-fit screen process` Not bad and very cheap.
+
+> But OCA is very sticky, you must be careful not to leave bubbles in the operation, otherwise it will be difficult to remove after sticking.
+
+## Other follow-ups will be added, if useful, remember to point the stars~
+
 
 # HoloCubic--多功能透明显示屏桌面站
 
